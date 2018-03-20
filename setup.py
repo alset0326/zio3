@@ -1,42 +1,45 @@
-#!/usr/bin/env python2
+from setuptools import setup
+from codecs import open
+from os import path
+from zio3 import __version__
 
-from distutils.core import setup
-from setuptools import find_packages
-
-from zio import __version__
+here = path.abspath(path.dirname(__file__))
+# Get the long description from the README file
+with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
+    long_description = f.read()
 
 setup(
     name='zio',
     version=__version__,
 
-    author='Wenlei Zhu',
-    author_email='i@ztrix.me',
-    url='https://github.com/zTrix/zio',
+    author='Alset0326',
+    author_email='alset0326@gmail.com',
+    url='https://github.com/alset0326/zio',
 
     license='LICENSE.txt',
     keywords="zio pwning io expect-like",
     description='Unified io lib for pwning development written in python.',
-    long_description=open('README.txt').read(),
+    long_description=long_description,
 
-    py_modules = ['zio'],
+    py_modules=['zio', 'winzio'],
 
     # Refers to test/test.py
     test_suite='test.test',
 
-    entry_points = {
+    entry_points={
         'console_scripts': [
             'zio=zio:main'
         ]
     },
-    classifiers = [
+    classifiers=[
         'Development Status :: 5 - Production/Stable',
         'Environment :: Console',
         'Intended Audience :: Developers',
         'Operating System :: POSIX',
         'Operating System :: MacOS :: MacOS X',
         'Programming Language :: Python',
-        'Programming Language :: Python :: 2.6',
-        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
         'Topic :: Software Development',
         'Topic :: System',
         'Topic :: Terminals',

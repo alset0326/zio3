@@ -1,8 +1,6 @@
 
 # zio
 
-[![Build Status](https://travis-ci.org/zTrix/zio.png)](https://travis-ci.org/zTrix/zio)
-
 [zio] is an easy-to-use io library for pwning development, supporting an unified interface for local process pwning and TCP socket io.
 
 The primary goal of [zio] is to provide unified io interface between process stdin/stdout and TCP socket io. So when you have done local pwning development, you only need to change the io target to pwn the remote server.
@@ -10,7 +8,7 @@ The primary goal of [zio] is to provide unified io interface between process std
 The following code illustrate the basic idea.
 
 ```python
-from zio import *
+from zio3 import *
 
 if you_are_debugging_local_server_binary:
     io = zio('./buggy-server')            # used for local pwning development
@@ -29,25 +27,25 @@ io.interact()
 ## Dependency
 
  - Linux or OSX
- - Python 2.6, 2.7
+ - Python 3.5, 3.6
  - termcolor (optional, for color support)
-    - $ pip install termcolor
+    - $ pip3 install termcolor
 
 ## Installation
 
 This is a single-file project so in most cases you can just download [zio.py](https://raw.githubusercontent.com/zTrix/zio/master/zio.py) and start using.
 
-pip is also supported, so you can also install by running 
+pip3 is also supported, so you can also install by running 
 
 ```bash
-$ pip2 install termcolor # for color support, optional
-$ pip2 install zio
+$ pip3 install termcolor # for color support, optional
+$ pip3 install zio3
 ```
 
 ## Examples
  
 ```python
-from zio import *
+from zio3 import *
 io = zio('./buggy-server')
 # io = zio((pwn.server, 1337))
 

@@ -10,7 +10,7 @@ The following code illustrate the basic idea.
 
 .. code:: python
 
-    from zio import *
+    from zio3 import *
 
     if you_are_debugging_local_server_binary:
         io = zio('./buggy-server')            # used for local pwning development
@@ -30,9 +30,9 @@ Dependency
 ==========
 
  - Linux or OSX
- - Python 2.6, 2.7
+ - Python 3.5, 3.6
  - termcolor (optional, for color support)
-    - $ pip install termcolor
+    - $ pip3 install termcolor
 
 Installation
 ============
@@ -43,15 +43,15 @@ pip is also supported, so you can also install by running
 
 .. code:: bash
 
-    $ pip2 install termcolor # for color support, optional
-    $ pip2 install zio
+    $ pip3 install termcolor # for color support, optional
+    $ pip3 install zio3
 
 Examples
 ========
  
 .. code:: python
 
-    from zio import *
+    from zio3 import *
     io = zio('./buggy-server')
     # io = zio((pwn.server, 1337))
 
