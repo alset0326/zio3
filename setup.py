@@ -9,7 +9,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(
-    name='zio',
+    name='zio3',
     version=__version__,
 
     author='Alset0326',
@@ -21,14 +21,14 @@ setup(
     description='Unified io lib for pwning development written in python.',
     long_description=long_description,
 
-    py_modules=['zio', 'winzio'],
+    py_modules=['zio3'],
 
     # Refers to test/test.py
     test_suite='test.test',
 
     entry_points={
         'console_scripts': [
-            'zio=zio:main'
+            'zio3=zio3:main'
         ]
     },
     classifiers=[
