@@ -848,6 +848,8 @@ class ZioSocket(ZioBase):
 
 
 class ZioProcess(ZioBase):
+    CHILD = pty.CHILD
+
     def __init__(self, target, *, stdin=PIPE, stdout=TTY_RAW, print_read=RAW, print_write=RAW, timeout=8, cwd=None,
                  env=None, sighup=signal.SIG_DFL, write_delay=0.05, ignorecase=False, debug=None):
 
@@ -866,12 +868,19 @@ class ZioProcess(ZioBase):
         self.child_pid = None
         self.closed = False
 
+        if isinstance(target, bytes):
+            target = ensure_str(target)
+        elif isinstance(target, tuple):
+            target = list(target)
+
         if isinstance(target, str):
             self.args = split_command_line(target)
             self.command = self.args[0]
-        else:
+        elif isinstance(target, list):
             self.args = target
             self.command = self.args[0]
+        else:
+            raise Exception('Unknown target type')
 
         command_with_path = which(self.command)
         if command_with_path is None:
@@ -912,7 +921,7 @@ class ZioProcess(ZioBase):
 
         if pid < 0:
             raise Exception('failed to fork')
-        elif pid == pty.CHILD:  # Child
+        elif pid == self.CHILD:  # Child
             os.close(stdout_master_fd)
 
             if os.isatty(stdin_slave_fd):
