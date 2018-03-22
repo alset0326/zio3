@@ -29,10 +29,26 @@ import stat
 import itertools
 from io import BytesIO
 from functools import wraps
+import builtins
 
 __all__ = ['l8', 'b8', 'l16', 'b16', 'l32', 'b32', 'l64', 'b64', 'zio', 'EOF', 'TIMEOUT', 'SOCKET', 'PROCESS', 'REPR',
            'EVAL', 'HEX', 'UNHEX', 'BIN', 'UNBIN', 'RAW', 'NONE', 'COLORED', 'PIPE', 'TTY', 'TTY_RAW',
            'ensure_str', 'ensure_bytes']
+
+# OS constants
+POSIX = os.name == "posix"
+WINDOWS = os.name == "nt"
+LINUX = sys.platform.startswith("linux")
+OSX = sys.platform.startswith("darwin")
+FREEBSD = sys.platform.startswith("freebsd")
+OPENBSD = sys.platform.startswith("openbsd")
+NETBSD = sys.platform.startswith("netbsd")
+BSD = FREEBSD or OPENBSD or NETBSD
+SUNOS = sys.platform.startswith("sunos") or sys.platform.startswith("solaris")
+AIX = sys.platform.startswith("aix")
+
+if WINDOWS:
+    raise Exception("zio (version %s) process mode is currently only supported on linux and osx." % __version__)
 
 
 # Define pack functions
@@ -266,6 +282,8 @@ class ZioBase(object, metaclass=abc.ABCMeta):
     string_type = bytes
     buffer_type = BytesIO  # Expecter used
     STDIN_FILENO = pty.STDIN_FILENO
+    STDOUT_FILENO = pty.STDOUT_FILENO
+    STDERR_FILENO = pty.STDERR_FILENO
 
     def __init__(self, target, *, print_read=RAW, print_write=RAW, timeout=8, write_delay=0.05, ignorecase=False,
                  debug=None):
@@ -532,7 +550,7 @@ class ZioBase(object, metaclass=abc.ABCMeta):
         cre = re.compile(ensure_bytes('.{%d}' % size), re.DOTALL)
         index = self.expect([cre, EOF])
         if index == 0:
-            assert self.before == self.string_type()
+            # assert self.before == self.string_type()  # Maybe not assert?
             return self.after
         return self.before
 
@@ -788,8 +806,7 @@ class ZioSocket(ZioBase):
     @property
     def pid(self):
         # code borrowed from https://github.com/Gallopsled/pwntools to implement gdb attach of local socket
-        # todo: osx
-        if sys.platform.startswith("darwin"):
+        if OSX:
             self._not_impl('osx cannot get pid of a socket yet')
 
         def toaddr(arg: tuple):
@@ -833,8 +850,6 @@ class ZioSocket(ZioBase):
 class ZioProcess(ZioBase):
     def __init__(self, target, *, stdin=PIPE, stdout=TTY_RAW, print_read=RAW, print_write=RAW, timeout=8, cwd=None,
                  env=None, sighup=signal.SIG_DFL, write_delay=0.05, ignorecase=False, debug=None):
-        if "windows" in platform.system().lower():
-            raise Exception("zio (version %s) process mode is currently only supported on linux and osx." % __version__)
 
         super().__init__(target, print_read=print_read, print_write=print_write, timeout=timeout,
                          write_delay=write_delay, ignorecase=ignorecase, debug=debug)
@@ -876,6 +891,8 @@ class ZioProcess(ZioBase):
         self._spawn()
 
     def _spawn(self):
+        exec_err_pipe_read, exec_err_pipe_write = os.pipe()
+
         if stdout == PIPE:
             stdout_slave_fd, stdout_master_fd = self.pipe_cloexec()
         else:
@@ -891,51 +908,59 @@ class ZioProcess(ZioBase):
         stdin_master_fd, stdin_slave_fd = self.stdin == PIPE and self.pipe_cloexec() or pty.openpty()
         if stdin_master_fd < 0 or stdin_slave_fd < 0: raise Exception('Could not openpty for stdin')
 
-        self.child_pid = os.fork()
+        pid = os.fork()
 
-        if self.child_pid < 0:
+        if pid < 0:
             raise Exception('failed to fork')
-        elif self.child_pid == 0:  # Child
+        elif pid == pty.CHILD:  # Child
             os.close(stdout_master_fd)
 
             if os.isatty(stdin_slave_fd):
-                self.__pty_make_controlling_tty(stdin_slave_fd)
-                # self.__pty_make_controlling_tty(stdout_slave_fd)
-
-            try:
-                if os.isatty(stdout_slave_fd) and os.isatty(pty.STDIN_FILENO):
-                    h, w = self.getwinsize(0)
-                    self.setwinsize(stdout_slave_fd, h, w)  # note that this may not be successful
-            except BaseException as ex:
-                if self.debug: log('[ WARN ] setwinsize exception: %s' % (str(ex)), f=self.debug)
+                self._pty_make_controlling_tty(stdin_slave_fd)
 
             # Dup fds for child
             def _dup2(a, b):
                 # dup2() removes the CLOEXEC flag but
                 # we must do it ourselves if dup2()
-                # would be a no-op (issue #10806).
+                # would be a no-op (python issue #10806).
                 if a == b:
                     self._set_cloexec_flag(a, False)
                 elif a is not None:
                     os.dup2(a, b)
 
             # redirect stdout and stderr to pty
-            os.dup2(stdout_slave_fd, pty.STDOUT_FILENO)
-            os.dup2(stdout_slave_fd, pty.STDERR_FILENO)
+            os.dup2(stdout_slave_fd, self.STDOUT_FILENO)
+            os.dup2(stdout_slave_fd, self.STDERR_FILENO)
 
             # redirect stdin to stdin_slave_fd instead of stdout_slave_fd, to prevent input echoed back
-            _dup2(stdin_slave_fd, pty.STDIN_FILENO)
+            _dup2(stdin_slave_fd, self.STDIN_FILENO)
 
-            if stdout_slave_fd > 2:
+            if stdout_slave_fd > self.STDERR_FILENO:
                 os.close(stdout_slave_fd)
 
             if stdin_master_fd is not None:
                 os.close(stdin_master_fd)
 
-            # do not allow child to inherit open file descriptors from parent
+            # set window size
+            try:
+                if os.isatty(stdout_slave_fd) and os.isatty(self.STDIN_FILENO):
+                    h, w = self.getwinsize(0)
+                    self.setwinsize(stdout_slave_fd, h, w)  # note that this may not be successful
+            except IOError as err:
+                if self.debug: log('[ WARN ] setwinsize exception: %s' % (str(err)), f=self.debug)
+                if err.args[0] not in (errno.EINVAL, errno.ENOTTY):
+                    raise
 
+            # [pexpect issue #119] 3. The child closes the reading end and sets the
+            # close-on-exec flag for the writing end.
+            os.close(exec_err_pipe_read)
+            fcntl.fcntl(exec_err_pipe_write, fcntl.F_SETFD, fcntl.FD_CLOEXEC)
+
+            # Do not allow child to inherit open file descriptors from parent,
+            # with the exception of the exec_err_pipe_write of the pipe
             max_fd = resource.getrlimit(resource.RLIMIT_NOFILE)[0]
-            os.closerange(3, max_fd)
+            os.closerange(self.STDERR_FILENO + 1, exec_err_pipe_write)
+            os.closerange(exec_err_pipe_write + 1, max_fd)
 
             # the following line matters, for example, if SIG_DFL specified and sighup sent when exit, the exitcode of child process can be affected to 1
             if self.sighup is not None:
@@ -945,91 +970,113 @@ class ZioProcess(ZioBase):
             if self.cwd is not None:
                 os.chdir(self.cwd)
 
-            if self.env is None:
-                os.execv(self.command, self.args)
+            try:
+                if self.env is None:
+                    os.execv(self.command, self.args)
+                else:
+                    os.execvpe(self.command, self.args, self.env)
+            except OSError as err:
+                # [pexpect issue #119] 5. If exec fails, the child writes the error
+                # code back to the parent using the pipe, then exits.
+                tosend = 'OSError:{}:{}'.format(err.errno, str(err))
+                tosend = tosend.encode('utf-8')
+                os.write(exec_err_pipe_write, tosend)
+                os.close(exec_err_pipe_write)
+                os._exit(os.EX_OSERR)
+
+        # parent
+        # [pexpect issue #119] 2. After forking, the parent closes the writing end
+        # of the pipe and reads from the reading end.
+        os.close(exec_err_pipe_write)
+        exec_err_data = os.read(exec_err_pipe_read, 4096)
+        os.close(exec_err_pipe_read)
+
+        # [pexepect issue #119] 6. The parent reads eof (a zero-length read) if the
+        # child successfully performed exec, since close-on-exec made
+        # successful exec close the writing end of the pipe. Or, if exec
+        # failed, the parent reads the error code and can proceed
+        # accordingly. Either way, the parent blocks until the child calls
+        # exec.
+        if len(exec_err_data) != 0:
+            try:
+                errclass, errno_s, errmsg = exec_err_data.split(b':', 2)
+                exctype = getattr(builtins, errclass.decode('ascii'), Exception)
+
+                exception = exctype(errmsg.decode('utf-8', 'replace'))
+                if exctype is OSError:
+                    exception.errno = int(errno_s)
+            except:
+                raise Exception('Subprocess failed, got bad error data: %r'
+                                % exec_err_data)
             else:
-                os.execvpe(self.command, self.args, self.env)
+                raise exception
 
-            # TODO: add subprocess errpipe to detect child error
-            # child exit here, the same as subprocess module do
-            os._exit(255)
+        self.child_pid = pid
+        self.writefd = stdin_master_fd
+        self.readfd = stdout_master_fd
 
-        else:
-            # after fork, parent
-            self.writefd = stdin_master_fd
-            self.readfd = stdout_master_fd
+        if os.isatty(self.writefd):
+            # there is no way to eliminate controlling characters in tcattr
+            # so we have to set raw mode here now
+            self._wfd_init_mode = tty.tcgetattr(self.writefd)[:]
+            if self.stdin == TTY_RAW:
+                self.ttyraw(self.writefd)
+                self._wfd_raw_mode = tty.tcgetattr(self.writefd)[:]
+            else:
+                self._wfd_raw_mode = self._wfd_init_mode[:]
 
-            if os.isatty(self.writefd):
-                # there is no way to eliminate controlling characters in tcattr
-                # so we have to set raw mode here now
-                self._wfd_init_mode = tty.tcgetattr(self.writefd)[:]
-                if self.stdin == TTY_RAW:
-                    self.ttyraw(self.writefd)
-                    self._wfd_raw_mode = tty.tcgetattr(self.writefd)[:]
-                else:
-                    self._wfd_raw_mode = self._wfd_init_mode[:]
+        if os.isatty(self.readfd):
+            self._rfd_init_mode = tty.tcgetattr(self.readfd)[:]
+            if stdout == TTY_RAW:
+                self.ttyraw(self.readfd, raw_in=False, raw_out=True)
+                self._rfd_raw_mode = tty.tcgetattr(self.readfd)[:]
+                if self.debug: log('stdout tty raw mode: %r' % self._rfd_raw_mode, f=self.debug)
+            else:
+                self._rfd_raw_mode = self._rfd_init_mode[:]
 
-            if os.isatty(self.readfd):
-                self._rfd_init_mode = tty.tcgetattr(self.readfd)[:]
-                if stdout == TTY_RAW:
-                    self.ttyraw(self.readfd, raw_in=False, raw_out=True)
-                    self._rfd_raw_mode = tty.tcgetattr(self.readfd)[:]
-                    if self.debug: log('stdout tty raw mode: %r' % self._rfd_raw_mode, f=self.debug)
-                else:
-                    self._rfd_raw_mode = self._rfd_init_mode[:]
+        os.close(stdin_slave_fd)
+        os.close(stdout_slave_fd)
 
-            os.close(stdin_slave_fd)
-            os.close(stdout_slave_fd)
+        time.sleep(self.close_delay)
 
-            time.sleep(self.close_delay)
+        atexit.register(self.kill, signal.SIGHUP)
 
-            atexit.register(self.kill, signal.SIGHUP)
-
-    def __pty_make_controlling_tty(self, tty_fd):
+    def _pty_make_controlling_tty(self, tty_fd):
         """This makes the pseudo-terminal the controlling tty. This should be
         more portable than the pty.fork() function. Specifically, this should
         work on Solaris. """
 
         child_name = os.ttyname(tty_fd)
 
-        # Disconnect from controlling tty. Harmless if not already connected.
+        # Disconnect from controlling tty, if any.  Raises OSError of ENXIO
+        # if there was no controlling tty to begin with, such as when
+        # executed by a cron(1) job.
         try:
             fd = os.open("/dev/tty", os.O_RDWR | os.O_NOCTTY)
-            if fd >= 0:
-                os.close(fd)
-        # which exception, shouldnt' we catch explicitly .. ?
-        except:
-            # Already disconnected. This happens if running inside cron.
-            pass
+            os.close(fd)
+        except OSError as err:
+            if err.errno != errno.ENXIO:
+                raise
 
         os.setsid()
 
-        # Verify we are disconnected from controlling tty
-        # by attempting to open it again.
+        # Verify we are disconnected from controlling tty by attempting to open
+        # it again.  We expect that OSError of ENXIO should always be raised.
         try:
             fd = os.open("/dev/tty", os.O_RDWR | os.O_NOCTTY)
-            if fd >= 0:
-                os.close(fd)
-                raise Exception('Failed to disconnect from ' +
-                                'controlling tty. It is still possible to open /dev/tty.')
-        # which exception, shouldnt' we catch explicitly .. ?
-        except:
-            # Good! We are disconnected from a controlling tty.
-            pass
+            os.close(fd)
+            raise Exception("OSError of errno.ENXIO should be raised.")
+        except OSError as err:
+            if err.errno != errno.ENXIO:
+                raise
 
         # Verify we can open child pty.
         fd = os.open(child_name, os.O_RDWR)
-        if fd < 0:
-            raise Exception("Could not open child pty, " + child_name)
-        else:
-            os.close(fd)
+        os.close(fd)
 
         # Verify we now have a controlling tty.
         fd = os.open("/dev/tty", os.O_WRONLY)
-        if fd < 0:
-            raise Exception("Could not open controlling tty, /dev/tty")
-        else:
-            os.close(fd)
+        os.close(fd)
 
     def _set_cloexec_flag(self, fd, cloexec=True):
         try:
@@ -1103,11 +1150,7 @@ class ZioProcess(ZioBase):
         return '\n'.join(ret)
 
     def terminate(self, force=False):
-
-        """This forces a child process to terminate. It starts nicely with
-        SIGHUP and SIGINT. If "force" is True then moves onto SIGKILL. This
-        returns True if the child was terminated. This returns False if the
-        child could not be terminated. """
+        """Copy from pexpect terminate"""
 
         if not self.isalive():
             return True
@@ -1199,16 +1242,15 @@ class ZioProcess(ZioBase):
 
         try:
             pid, status = os.waitpid(self.child_pid, waitpid_options)
-        except OSError:
-            err = sys.exc_info()[1]
+        except OSError as e:
             # No child processes
-            if err.errno == errno.ECHILD:
+            if e.errno == errno.ECHILD:
                 raise Exception('isalive() encountered condition ' +
                                 'where "terminated" is 0, but there was no child ' +
                                 'process. Did someone else call waitpid() ' +
                                 'on our process?')
             else:
-                raise err
+                raise
 
         # I have to do this twice for Solaris.
         # I can't even believe that I figured this out...
@@ -1259,9 +1301,9 @@ class ZioProcess(ZioBase):
         if self.print_read: stdout(self._print_read(self.buffer))
         self._buffer = self.buffer_type()
         # if input_filter is not none, we should let user do some line editing
-        if not input_filter and os.isatty(pty.STDIN_FILENO):
-            mode = tty.tcgetattr(pty.STDIN_FILENO)  # mode will be restored after interact
-            self.ttyraw(pty.STDIN_FILENO)  # set to raw mode to pass all input thru, supporting apps as vim
+        if not input_filter and os.isatty(self.STDIN_FILENO):
+            mode = tty.tcgetattr(self.STDIN_FILENO)  # mode will be restored after interact
+            self.ttyraw(self.STDIN_FILENO)  # set to raw mode to pass all input thru, supporting apps as vim
         if os.isatty(self.writefd):
             # here, enable cooked mode for process stdin
             # but we should only enable for those who need cooked mode, not stuff like vim
@@ -1281,7 +1323,7 @@ class ZioProcess(ZioBase):
             # to solve this situation, set stdin = TTY_RAW, but note that you will need to manually escape control characters by prefixing Ctrl-V
 
         try:
-            rfdlist = [self.readfd, pty.STDIN_FILENO]
+            rfdlist = [self.readfd, self.STDIN_FILENO]
             if os.isatty(self.writefd):
                 # wfd for tty echo
                 rfdlist.append(self.writefd)
@@ -1318,9 +1360,9 @@ class ZioProcess(ZioBase):
                     else:
                         rfdlist.remove(self.readfd)
                         self.flag_eof = True
-                if pty.STDIN_FILENO in r:
+                if self.STDIN_FILENO in r:
                     try:
-                        data = os.read(pty.STDIN_FILENO, 1024)
+                        data = os.read(self.STDIN_FILENO, 1024)
                     except OSError as e:
                         # the subprocess may have closed before we get to reading it
                         if e.errno != errno.EIO:
@@ -1345,7 +1387,7 @@ class ZioProcess(ZioBase):
                             break
                     else:
                         self.end(force_close=True)
-                        rfdlist.remove(pty.STDIN_FILENO)
+                        rfdlist.remove(self.STDIN_FILENO)
             while True:  # read the final buffered output, note that the process probably is not alive, so use while True to read until end (fix pipe stdout interact mode bug)
                 r, w, e = select_ignore_interrupts([self.readfd], [], [], timeout=self.close_delay)
                 if self.readfd in r:
@@ -1365,8 +1407,8 @@ class ZioProcess(ZioBase):
                 else:
                     break
         finally:
-            if not input_filter and os.isatty(pty.STDIN_FILENO):
-                tty.tcsetattr(pty.STDIN_FILENO, tty.TCSAFLUSH, mode)
+            if not input_filter and os.isatty(self.STDIN_FILENO):
+                tty.tcsetattr(self.STDIN_FILENO, tty.TCSAFLUSH, mode)
             if os.isatty(self.writefd):
                 self.ttyraw(self.writefd)
 
@@ -2023,9 +2065,9 @@ def main():
 
     if len(args.target) == 2:
         try:
-            port = int(args[1])
-            if _is_hostport_tuple((args[0], port)):
-                target = (args[0], port)
+            port = int(args.target[1])
+            if _is_hostport_tuple((args.target[0], port)):
+                target = (args.target[0], port)
         except:
             pass
     if not target:
