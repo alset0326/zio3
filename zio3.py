@@ -1984,7 +1984,9 @@ def all_pids():
 def main():
     import argparse
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description='[zio] is an easy-to-use io library for pwning development, '
+                    'supporting an unified interface for local process pwning and TCP socket io.')
 
     parser.add_argument('-i', '--stdin', help='tty|pipe, specify tty or pipe stdin, default to tty')
     parser.add_argument('-o', '--stdout', help='tty|pipe, specify tty or pipe stdout, default to tty')
