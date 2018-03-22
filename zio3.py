@@ -70,6 +70,7 @@ def _lb_wrapper(func):
             elif not i:
                 ret.append(None)
             else:
+                i = ensure_bytes(i)
                 v = struct.unpack(endian + pfs[bits] * (len(i) * 8 // bits), i)
                 ret += v
         if join:
