@@ -1,9 +1,10 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 import os, sys
 
+
 def evals(s):
-    st = 0      # 0 for normal, 1 for escape, 2 for \xXX
+    st = 0  # 0 for normal, 1 for escape, 2 for \xXX
     ret = []
     i = 0
     while i < len(s):
@@ -28,13 +29,14 @@ def evals(s):
             else:
                 raise Exception('invalid repr of str %s' % s)
         else:
-            num = int(s[i:i+2], 16)
+            num = int(s[i:i + 2], 16)
             assert 0 <= num < 256
             ret.append(chr(num))
             st = 0
             i += 1
         i += 1
     return ''.join(ret)
+
 
 sys.stdout.write(evals(sys.argv[1]))
 sys.stdout.flush()

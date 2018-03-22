@@ -1,7 +1,8 @@
-#!/usr/bin/env python2
-#-*- coding:utf-8 -*-
+#!/usr/bin/env python3
+# -*- coding:utf-8 -*-
 
 import os, sys, signal, datetime, time
+
 
 def handler(a, b):
     now = datetime.datetime.now().strftime('[%Y-%m-%d_%H:%M:%S]')
@@ -10,9 +11,10 @@ def handler(a, b):
     f.close()
     sys.exit(0)
 
+
 signal.signal(signal.SIGHUP, handler)
 
-print 'pid =', os.getpid()
+print('pid =', os.getpid())
 
 while True:
     sys.stdout.write(sys.stdin.readline())

@@ -1,6 +1,6 @@
 *.pyc
 dist
 build
-zio.egg-info
+*.egg-info
 .idea
 .vscode
