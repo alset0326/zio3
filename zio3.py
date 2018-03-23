@@ -141,7 +141,7 @@ TTY_RAW = 'ttyraw'  # io mode (process io): send all characters just untouched
 ensure_bytes = lambda s: s and (isinstance(s, bytes) and s or s.encode('latin-1')) or b''
 
 
-def ensure_str(s, encoding='utf-8'):
+def ensure_str(s, encoding=sys.getdefaultencoding()):
     if s and isinstance(s, str):
         return s
     if s and isinstance(s, bytes):
@@ -167,11 +167,11 @@ COLORS = dict(
     list(zip(['grey', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white', ],
              list(range(30, 38)))))
 
-RESET = '\033[0m'
+RESET = b'\033[0m'
 
 
-def colored(text, color=None, on_color=None, attrs=None):
-    """ colored copied from termcolor v1.1.0
+def colored(text: bytes, color: str = None, on_color: str = None, attrs: str = None):
+    """ colored copied from termcolor v1.1.0 changing to bytes
 
     Colorize text.
 
@@ -190,7 +190,7 @@ def colored(text, color=None, on_color=None, attrs=None):
     """
 
     if os.getenv('ANSI_COLORS_DISABLED') is None:
-        fmt_str = '\033[%dm%s'
+        fmt_str = b'\033[%dm%s'
         if color is not None:
             text = fmt_str % (COLORS[color], text)
 
@@ -205,42 +205,39 @@ def colored(text, color=None, on_color=None, attrs=None):
     return text
 
 
-def stdout(s, color=None, on_color=None, attrs=None):
-    s = ensure_str(s)
+def stdout(s: bytes, color=None, on_color=None, attrs=None):
+    """Write bytes to stdout"""
     if not color:
-        sys.stdout.write(s)
+        sys.stdout.buffer.write(s)
     else:
-        sys.stdout.write(colored(s, color, on_color, attrs))
+        sys.stdout.buffer.write(colored(s, color, on_color, attrs))
     sys.stdout.flush()
 
 
-def log(s, color=None, on_color=None, attrs=None, new_line=True, timestamp=False, f=sys.stderr):
+def log(s: bytes, color=None, on_color=None, attrs=None, new_line=True, timestamp=False, f=sys.stderr):
     if timestamp is True:
-        now = datetime.datetime.now().strftime('[%Y-%m-%d_%H:%M:%S]')
+        now = ensure_bytes(datetime.datetime.now().strftime('[%Y-%m-%d_%H:%M:%S]'))
     elif timestamp is False:
         now = None
     elif timestamp:
         now = timestamp
     else:
         now = None
-    if not color:
-        s = str(s)
-    else:
-        s = colored(str(s), color, on_color, attrs)
+    if color:
+        s = colored(s, color, on_color, attrs)
     if now:
         f.write(now)
-        f.write(' ')
-    f.write(s)
+        f.write(b' ')
+    f.buffer.write(s)
     if new_line:
-        f.write('\n')
+        f.buffer.write(b'\n')
     f.flush()
 
 
-def COLORED(f, color='cyan', on_color=None, attrs=None): return lambda s: \
-    colored(ensure_str(f(s)), color, on_color, attrs)
+def COLORED(f, color='cyan', on_color=None, attrs=None): return lambda s: colored(f(s), color, on_color, attrs)
 
 
-def REPR(s): return repr(s + b'\r\n')
+def REPR(s): return ensure_bytes(repr(s)) + b'\r\n'
 
 
 def EVAL(s):  # now you are not worried about pwning yourself
@@ -275,7 +272,7 @@ class ZioBase(object, metaclass=abc.ABCMeta):
     |-----------
     | bytes     ->  class buffer
     |-----------
-    | bytes     ->  syscall read/write
+    | bytes     ->  syscall read/write, stdout
     |
     """
     linesep = ensure_bytes(os.linesep)
