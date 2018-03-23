@@ -31,12 +31,22 @@ def evals(s):
         else:
             num = int(s[i:i + 2], 16)
             assert 0 <= num < 256
-            ret.append(chr(num))
+            ret.append(bytes((num,)).decode('latin-1'))
             st = 0
             i += 1
         i += 1
     return ''.join(ret)
 
 
-sys.stdout.write(evals(sys.argv[1]))
+sys.stdout.buffer.write(evals(sys.argv[1]).encode('latin-1'))
 sys.stdout.flush()
+#
+# if __name__ == '__main__':
+#     import random, string, ast
+#
+#     unprintable = [c for c in range(256) if chr(c) not in string.printable]
+#     for i in range(10):
+#         random.shuffle(unprintable)
+#     s = repr(bytes(unprintable))[2:-1]
+#     print(s)
+#     print(evals(s) == bytes(unprintable).decode('latin-1'))

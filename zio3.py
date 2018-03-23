@@ -903,7 +903,7 @@ class ZioProcess(ZioBase):
     def _spawn(self):
         exec_err_pipe_read, exec_err_pipe_write = os.pipe()
 
-        if stdout == PIPE:
+        if self.stdout == PIPE:
             stdout_slave_fd, stdout_master_fd = self.pipe_cloexec()
         else:
             stdout_master_fd, stdout_slave_fd = pty.openpty()
@@ -1037,7 +1037,7 @@ class ZioProcess(ZioBase):
 
         if os.isatty(self.readfd):
             self._rfd_init_mode = tty.tcgetattr(self.readfd)[:]
-            if stdout == TTY_RAW:
+            if self.stdout == TTY_RAW:
                 self.ttyraw(self.readfd, raw_in=False, raw_out=True)
                 self._rfd_raw_mode = tty.tcgetattr(self.readfd)[:]
                 if self.debug: log('stdout tty raw mode: %r' % self._rfd_raw_mode, f=self.debug)
