@@ -807,7 +807,8 @@ class ZioSocket(ZioBase):
     def pid(self):
         # code borrowed from https://github.com/Gallopsled/pwntools to implement gdb attach of local socket
         if OSX:
-            self._not_impl('osx cannot get pid of a socket yet')
+            # osx cannot get pid of a socket yet
+            return None
 
         def toaddr(arg: tuple):
             """
