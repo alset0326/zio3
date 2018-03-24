@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Mainly borrowed from pexpect. Thanks very much!
 
-__version__ = "3.0.0"
+__version__ = "3.0.1"
 __project__ = "https://github.com/alset0326/zio"
 
 import struct
@@ -627,7 +627,8 @@ class ZioBase(object, metaclass=abc.ABCMeta):
     def gdb_hint(self, breakpoints=None, relative=None, extras=None):
         pid = self.pid
         if not pid:
-            input(colored('[ WARN ] pid unavailable to attach gdb, please find out the pid by your own', 'yellow'))
+            input('[ WARN ] pid unavailable to attach gdb, please find out the pid by your own. '
+                  'Press enter to continue ...')
             return
         hints = ['attach %d' % pid]
         base = 0
@@ -643,8 +644,9 @@ class ZioBase(object, metaclass=abc.ABCMeta):
         if extras:
             for e in extras:
                 hints.append(str(e))
-        gdb = colored('zio -l 0.5 -b "For help" -a "`printf \'' + '\\r\\n'.join(hints) + '\\r\\n\'`" gdb',
-                      'magenta') + '\nuse cmdline above to attach gdb then press enter to continue ... '
+
+        gdb = 'gdb' + ''.join((' -eval-command  "' + i + '"' for i in hints)) + \
+              '\nuse cmdline above to attach gdb then press enter to continue ...'
         input(gdb)
 
     def _not_impl(self, hint="Not Implemented"):
