@@ -625,6 +625,8 @@ class ZioBase(object, metaclass=abc.ABCMeta):
         return ret
 
     def gdb_hint(self, breakpoints=None, relative=None, extras=None):
+        # disable timeout while using gdb_hint
+        self.timeout = None
         pid = self.pid
         if not pid:
             input('[ WARN ] pid unavailable to attach gdb, please find out the pid by your own. '
