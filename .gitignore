@@ -1,0 +1,4 @@
+*.pyc
+dist
+build
+zio.egg-info
