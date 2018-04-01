@@ -214,7 +214,8 @@ def stdout(s: bytes, color=None, on_color=None, attrs=None):
     sys.stdout.flush()
 
 
-def log(s: bytes, color=None, on_color=None, attrs=None, new_line=True, timestamp=False, f=sys.stderr):
+def log(s, color=None, on_color=None, attrs=None, new_line=True, timestamp=False, f=sys.stderr):
+    s = ensure_bytes(s)
     if timestamp is True:
         now = ensure_bytes(datetime.datetime.now().strftime('[%Y-%m-%d_%H:%M:%S]'))
     elif timestamp is False:
@@ -226,8 +227,8 @@ def log(s: bytes, color=None, on_color=None, attrs=None, new_line=True, timestam
     if color:
         s = colored(s, color, on_color, attrs)
     if now:
-        f.write(now)
-        f.write(b' ')
+        f.buffer.write(now)
+        f.buffer.write(b' ')
     f.buffer.write(s)
     if new_line:
         f.buffer.write(b'\n')
@@ -1335,6 +1336,7 @@ class ZioProcess(ZioBase):
             # to solve this situation, set stdin = TTY_RAW, but note that you will need to manually escape control characters by prefixing Ctrl-V
 
         try:
+            data = ''
             rfdlist = [self.readfd, self.STDIN_FILENO]
             if os.isatty(self.writefd):
                 # wfd for tty echo
