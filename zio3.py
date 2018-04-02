@@ -2,7 +2,7 @@
 # Mainly borrowed from pexpect. Thanks very much!
 
 __version__ = "3.0.1"
-__project__ = "https://github.com/alset0326/zio"
+__project__ = "https://github.com/alset0326/zio3"
 
 import struct
 import socket
@@ -1336,7 +1336,7 @@ class ZioProcess(ZioBase):
             # to solve this situation, set stdin = TTY_RAW, but note that you will need to manually escape control characters by prefixing Ctrl-V
 
         try:
-            data = ''
+            data = b''
             rfdlist = [self.readfd, self.STDIN_FILENO]
             if os.isatty(self.writefd):
                 # wfd for tty echo
