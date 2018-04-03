@@ -1535,6 +1535,87 @@ def zio(target, *, stdin=PIPE, stdout=TTY_RAW, print_read=RAW, print_write=RAW, 
                           ignorecase=ignorecase, debug=debug)
 
 
+def create_zio(target, func=None, description=False):
+    """
+    Auto use zio.interact() to generate zio python script
+    :param target: like zio target
+    :param func: func name if you like
+    :param description: add communicate data not if True
+    :return: None
+    """
+    headers = (
+        '',
+        '#!/usr/bin/env python3',
+        '',
+        'from zio3 import *',
+        '',
+        'target = {}'.format(repr(target)),
+        "z = zio(target, print_read=COLORED(RAW, 'cyan'), print_write=COLORED(RAW, 'red'))",
+        '',
+    )
+    header = os.linesep.join(headers)
+
+    l = []
+    linesep = os.linesep
+    if func is not None:
+        l.append('def {}():'.format(func))
+        linesep += ' ' * 4
+
+    input_list = []
+    output_list = []
+    # (type, data), type 0(in)/1(out), data: bytes
+    communicate_chains = []
+
+    def input_filter(data):
+        if output_list:
+            # process output chain
+            communicate_chains.append((1, b''.join(output_list)))
+            output_list.clear()
+        input_list.append(data)
+        return data
+
+    def output_filter(data):
+        if input_list:
+            # process input chain
+            communicate_chains.append((0, b''.join(input_list)))
+            input_list.clear()
+        output_list.append(data)
+        return data
+
+    z = zio(target)
+    try:
+        z.interact(escape_character=b'\x03', input_filter=input_filter, output_filter=output_filter)
+    except KeyboardInterrupt:
+        pass
+
+    for t, data in communicate_chains:
+        if t == 0:
+            # process input
+            if description:
+                l.append(os.linesep.join(('"""', ensure_str(data), '"""')))
+            if data.endswith(b'\n'):
+                l.append('z.writeline({})'.format(repr(data[:-1])))
+            else:
+                l.append('z.write({})'.format(repr(data)))
+        elif t == 1:
+            # process output
+            if description:
+                l.append(os.linesep.join(('"""', ensure_str(data), '"""')))
+            end_pos = len(data) - 1
+            while data.find(data[end_pos:]) != end_pos:
+                end_pos -= 1
+            until_bytes = data[end_pos:]
+            if until_bytes == b'\n':
+                l.append('z.readline()')
+            else:
+                l.append('z.read_until({})'.format(repr(until_bytes)))
+        else:
+            raise NotImplementedError()
+
+    result = os.linesep.join((header, linesep.join(l)))
+    print(result)
+
+
 class Expecter(object):
     def __init__(self, spawn, searcher, searchwindowsize=-1):
         self.spawn = spawn
@@ -2004,6 +2085,8 @@ def main():
     parser.add_argument('-d', '--decode',
                         help='when in interact mode, this option can be used to specify decode function REPR/HEX to input raw hex bytes')
     parser.add_argument('-l', '--delay', help='write delay, time to wait before write')
+    parser.add_argument('-c', '--create', action='store_true',
+                        help='Auto use zio.interact() to generate zio python script')
     parser.add_argument('--debug', help='debug mode')
     parser.add_argument('target', help='cmdline | host port', nargs=argparse.ONE_OR_MORE)
 
@@ -2091,6 +2174,10 @@ def main():
             target = args.target[0]
         else:
             target = args.target
+
+    if args.create:
+        create_zio(target)
+        return
 
     io = zio(target, **kwargs)
     if before:
