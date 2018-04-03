@@ -1535,12 +1535,13 @@ def zio(target, *, stdin=PIPE, stdout=TTY_RAW, print_read=RAW, print_write=RAW, 
                           ignorecase=ignorecase, debug=debug)
 
 
-def create_zio(target, func=None, description=False):
+def create_zio(target, func=None, description=False, patch=False):
     """
     Auto use zio.interact() to generate zio python script
     :param target: like zio target
     :param func: func name if you like
     :param description: add communicate data not if True
+    :param patch: append to caller file itself
     :return: None
     """
     headers = (
@@ -1611,6 +1612,15 @@ def create_zio(target, func=None, description=False):
                 l.append('z.read_until({})'.format(repr(until_bytes)))
         else:
             raise NotImplementedError()
+
+    if patch:
+        import inspect
+        caller = inspect.stack()[1].filename
+        result = linesep.join(l)
+        with open(caller, 'a+') as f:
+            print(file=f)
+            print(result, file=f)
+        return
 
     result = os.linesep.join((header, linesep.join(l)))
     print(result)
