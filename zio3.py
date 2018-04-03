@@ -33,7 +33,7 @@ import builtins
 
 __all__ = ['l8', 'b8', 'l16', 'b16', 'l32', 'b32', 'l64', 'b64', 'zio', 'EOF', 'TIMEOUT', 'SOCKET', 'PROCESS', 'REPR',
            'EVAL', 'HEX', 'UNHEX', 'BIN', 'UNBIN', 'RAW', 'NONE', 'COLORED', 'PIPE', 'TTY', 'TTY_RAW',
-           'ensure_str', 'ensure_bytes']
+           'ensure_str', 'ensure_bytes', 'create_zio']
 
 # OS constants
 POSIX = os.name == "posix"
