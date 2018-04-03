@@ -1535,15 +1535,23 @@ def zio(target, *, stdin=PIPE, stdout=TTY_RAW, print_read=RAW, print_write=RAW, 
                           ignorecase=ignorecase, debug=debug)
 
 
-def create_zio(target, func=None, description=False, patch=False):
+def create_zio(target, func=None, description=False, patch=False, zio_var='z'):
     """
     Auto use zio.interact() to generate zio python script
     :param target: like zio target
     :param func: func name if you like
     :param description: add communicate data not if True
     :param patch: append to caller file itself
+    :param zio_var: zio instance name in output, default is 'z'
     :return: None
     """
+    functions = {
+        'writeline': zio_var + '.writeline({})',
+        'write': zio_var + '.write({})',
+        'readline': zio_var + '.readline()',
+        'read_until': zio_var + '.read_until({})'
+    }
+
     headers = (
         '',
         '#!/usr/bin/env python3',
@@ -1595,9 +1603,9 @@ def create_zio(target, func=None, description=False, patch=False):
             if description:
                 l.append(os.linesep.join(('"""', ensure_str(data), '"""')))
             if data.endswith(b'\n'):
-                l.append('z.writeline({})'.format(repr(data[:-1])))
+                l.append(functions['writeline'].format(repr(data[:-1])))
             else:
-                l.append('z.write({})'.format(repr(data)))
+                l.append(functions['write'].format(repr(data)))
         elif t == 1:
             # process output
             if description:
@@ -1607,9 +1615,9 @@ def create_zio(target, func=None, description=False, patch=False):
                 end_pos -= 1
             until_bytes = data[end_pos:]
             if until_bytes == b'\n':
-                l.append('z.readline()')
+                l.append(functions['readline'])
             else:
-                l.append('z.read_until({})'.format(repr(until_bytes)))
+                l.append(functions['read_until'].format(repr(until_bytes)))
         else:
             raise NotImplementedError()
 
