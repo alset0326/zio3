@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Mainly borrowed from pexpect. Thanks very much!
 
-__version__ = "3.0.2"
+__version__ = "3.0.3"
 __project__ = "https://github.com/alset0326/zio3"
 
 import struct
@@ -537,7 +537,7 @@ class ZioBase(object, metaclass=abc.ABCMeta):
 
         raise Exception('Reached an unexpected state.')  # pragma: no cover
 
-    def read(self, size=-1, timeout=-1):
+    def read(self, size=-1, timeout=None):
         """Copy from pexpect read"""
         if size == 0:
             return self.string_type()
@@ -547,7 +547,7 @@ class ZioBase(object, metaclass=abc.ABCMeta):
             return self.before
 
         cre = re.compile(ensure_bytes('.{%d}' % size), re.DOTALL)
-        index = self.expect([cre, EOF])
+        index = self.expect([cre, EOF], timeout=timeout)
         if index == 0:
             # assert self.before == self.string_type()  # Maybe not assert?
             return self.after
@@ -618,12 +618,38 @@ class ZioBase(object, metaclass=abc.ABCMeta):
             ret += self.after  # after is the matched string, before is the string before this match
         return ret  # be compatible with telnetlib.read_until
 
+    readuntil = read_until
+
     def read_until_re(self, pattern, timeout=-1, searchwindowsize=None):
         matched = self.expect(pattern, timeout, searchwindowsize)
         ret = self.before
         if isinstance(self.after, self.string_type):
             ret += self.after
         return ret
+
+    readuntilre = read_until_re
+
+    # Combinations, from pwntools
+
+    def writeafter(self, pattern, data, timeout=-1, searchwindowsize=None):
+        try:
+            return self.read_until(pattern, timeout, searchwindowsize)
+        finally:
+            self.write(data)
+
+    def writelineafter(self, pattern, data, timeout=-1, searchwindowsize=None):
+        try:
+            return self.read_until(pattern, timeout, searchwindowsize)
+        finally:
+            self.writeline(data)
+
+    def writethen(self, pattern, data, timeout=-1, searchwindowsize=None):
+        self.write(data)
+        return self.read_until(pattern, timeout, searchwindowsize)
+
+    def writelinethen(self, pattern, data, timeout=-1, searchwindowsize=None):
+        self.writeline(data)
+        return self.read_until(pattern, timeout, searchwindowsize)
 
     def gdb_hint(self, breakpoints=None, relative=None, extras=None):
         # disable timeout while using gdb_hint
@@ -651,12 +677,6 @@ class ZioBase(object, metaclass=abc.ABCMeta):
         gdb = 'gdb' + ''.join((' -eval-command  "' + i + '"' for i in hints)) + \
               '\nuse cmdline above to attach gdb then press enter to continue ...'
         input(gdb)
-
-    def _not_impl(self, hint="Not Implemented"):
-        raise NotImplementedError(hint)
-
-    # apis below
-    read_after = read_before = read_between = read_range = _not_impl
 
     @abc.abstractmethod
     def terminate(self, force=False):
@@ -694,6 +714,28 @@ class ZioBase(object, metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def pid(self):
         pass
+
+    # not impl should at last
+    def _not_impl(self, hint="Not Implemented"):
+        raise NotImplementedError(hint)
+
+    # apis below
+    read_after = read_before = read_between = read_range = _not_impl
+
+    # pwntools style
+    recv = read
+    recvuntil = read_until
+    recvlines = readlines
+    recvline = readline
+    recvregex = read_until_re
+    recvall = read
+    send = write
+    sendline = writeline
+    sendlines = writelines
+    sendafter = writeafter
+    sendlineafter = writelineafter
+    sendthen = writethen
+    sendlinethen = writelinethen
 
 
 class ZioSocket(ZioBase):
