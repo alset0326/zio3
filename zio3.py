@@ -1577,7 +1577,7 @@ def zio(target, *, stdin=PIPE, stdout=TTY_RAW, print_read=RAW, print_write=RAW, 
                           ignorecase=ignorecase, debug=debug)
 
 
-def create_zio(target, func=None, description=False, patch=False, zio_var='z'):
+def create_zio(target, func=None, description=False, patch=False, zio_var='z', pwntools=False):
     """
     Auto use zio.interact() to generate zio python script
     :param target: like zio target
@@ -1585,33 +1585,10 @@ def create_zio(target, func=None, description=False, patch=False, zio_var='z'):
     :param description: add communicate data not if True
     :param patch: append to caller file itself
     :param zio_var: zio instance name in output, default is 'z'
+    :param pwntools: use pwntools style functions
     :return: None
     """
-    functions = {
-        'writeline': zio_var + '.writeline({})',
-        'write': zio_var + '.write({})',
-        'readline': zio_var + '.readline()',
-        'read_until': zio_var + '.read_until({})'
-    }
-
-    headers = (
-        '',
-        '#!/usr/bin/env python3',
-        '',
-        'from zio3 import *',
-        '',
-        'target = {}'.format(repr(target)),
-        "{} = zio(target, print_read=COLORED(RAW, 'cyan'), print_write=COLORED(RAW, 'red'))".format(zio_var),
-        '',
-    )
-    header = os.linesep.join(headers)
-
-    l = []
-    linesep = os.linesep
-    if func is not None:
-        l.append('def {}():'.format(func))
-        linesep += ' ' * 4
-
+    # collect interact data
     input_list = []
     output_list = []
     # (type, data), type 0(in)/1(out), data: bytes
@@ -1639,6 +1616,27 @@ def create_zio(target, func=None, description=False, patch=False, zio_var='z'):
     except KeyboardInterrupt:
         pass
 
+    # init function name dict
+    if pwntools:
+        functions = {
+            'writeline': zio_var + '.sendline({})',
+            'write': zio_var + '.send({})',
+            'readline': zio_var + '.recvline()',
+            'read_until': zio_var + '.recvuntil({})'
+        }
+    else:
+        functions = {
+            'writeline': zio_var + '.writeline({})',
+            'write': zio_var + '.write({})',
+            'readline': zio_var + '.readline()',
+            'read_until': zio_var + '.read_until({})'
+        }
+
+    l = []
+    linesep = os.linesep
+    if func is not None:
+        l.append('def {}():'.format(func))
+        linesep += ' ' * 4
     for t, data in communicate_chains:
         if t == 0:
             # process input
@@ -1663,15 +1661,28 @@ def create_zio(target, func=None, description=False, patch=False, zio_var='z'):
         else:
             raise NotImplementedError()
 
+    # deal with patch, only print functions
     if patch:
         import inspect
         caller = inspect.stack()[1].filename
         result = linesep.join(l)
         with open(caller, 'a+') as f:
-            print(file=f)
+            print(os.linesep, file=f)
             print(result, file=f)
         return
 
+    # deal with runnable zio header
+    headers = (
+        '',
+        '#!/usr/bin/env python3',
+        '',
+        'from zio3 import *',
+        '',
+        'target = {}'.format(repr(target)),
+        "{} = zio(target, print_read=COLORED(RAW, 'cyan'), print_write=COLORED(RAW, 'red'))".format(zio_var),
+        '',
+    )
+    header = os.linesep.join(headers)
     result = os.linesep.join((header, linesep.join(l)))
     print(result)
 
