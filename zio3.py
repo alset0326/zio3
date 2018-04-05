@@ -1559,7 +1559,7 @@ def create_zio(target, func=None, description=False, patch=False, zio_var='z'):
         'from zio3 import *',
         '',
         'target = {}'.format(repr(target)),
-        "z = zio(target, print_read=COLORED(RAW, 'cyan'), print_write=COLORED(RAW, 'red'))",
+        "{} = zio(target, print_read=COLORED(RAW, 'cyan'), print_write=COLORED(RAW, 'red'))".format(zio_var),
         '',
     )
     header = os.linesep.join(headers)
