@@ -117,6 +117,13 @@ def l64(*args): pass
 def b64(*args): pass
 
 
+# pwntools style
+p32 = l32
+u32 = l32
+p64 = l64
+u64 = l64
+
+
 # Define trigger exceptions
 
 class EOF(Exception):
@@ -736,6 +743,9 @@ class ZioBase(object, metaclass=abc.ABCMeta):
     sendlineafter = writelineafter
     sendthen = writethen
     sendlinethen = writelinethen
+
+    def interaction(self, escape_character=None, input_filter=None, output_filter=None, raw_rw=True):
+        self.interact(escape_character, input_filter, output_filter, raw_rw)
 
 
 class ZioSocket(ZioBase):
