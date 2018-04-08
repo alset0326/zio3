@@ -1722,7 +1722,8 @@ def create_zio(target, *, func=None, description=False, patch=False, zio_var='z'
         else:
             import inspect
             for frame in inspect.stack():
-                if __file__ != frame.filename:
+                # assert pyc
+                if frame.filename not in __file__:
                     caller = frame.filename
                     break
         result = os.linesep.join(ll)
