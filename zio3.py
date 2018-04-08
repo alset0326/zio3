@@ -1587,15 +1587,18 @@ def zio(target, *, stdin=PIPE, stdout=TTY_RAW, print_read=RAW, print_write=RAW, 
                           ignorecase=ignorecase, debug=debug)
 
 
-def create_zio(target, func=None, description=False, patch=False, zio_var='z', pwntools=False):
+def create_zio(target, *, func=None, description=False, patch=False, zio_var='z', pwntools=False,
+               auto=False, min_same_lines=2, **kwargs):
     """
     Auto use zio.interact() to generate zio python script
     :param target: like zio target
-    :param func: func name if you like
+    :param func: func name if you like. disabled in auto mode
     :param description: add communicate data not if True
-    :param patch: append to caller file itself
+    :param patch: append to caller file itself. True/False/str
     :param zio_var: zio instance name in output, default is 'z'
     :param pwntools: use pwntools style functions
+    :param auto: auto detect func split position
+    :param min_same_lines: min same lines when check menu bytes
     :return: None
     """
     # collect interact data
@@ -1620,11 +1623,21 @@ def create_zio(target, func=None, description=False, patch=False, zio_var='z', p
         output_list.append(data)
         return data
 
-    z = zio(target)
+    z = zio(target, **kwargs)
     try:
-        z.interact(escape_character=b'\x03', input_filter=input_filter, output_filter=output_filter)
+        z.interact(input_filter=input_filter, output_filter=output_filter)
     except KeyboardInterrupt:
-        pass
+        z.close()
+
+    # todo: ouput first?
+    if output_list:
+        # if last is input then finish output chain
+        communicate_chains.append((1, b''.join(output_list)))
+        output_list.clear()
+    if input_list:
+        # if last is output then finish input chain
+        communicate_chains.append((0, b''.join(input_list)))
+        input_list.clear()
 
     # init function name dict
     if pwntools:
@@ -1642,11 +1655,21 @@ def create_zio(target, func=None, description=False, patch=False, zio_var='z', p
             'read_until': zio_var + '.read_until({})'
         }
 
-    l = []
-    linesep = os.linesep
-    if func is not None:
+    l = []  # list of lines in one function
+    ll = []  # list of functions which have several lines
+    funclinesep = os.linesep  # linesep for function lines join. equal to os.linesep if no funtion
+
+    if auto:
+        # define auto check vars
+        funclinesep += ' ' * 4
+        samelines = lambda a, b: len(set(a.splitlines()) & set(b.splitlines()))
+        menu_bytes = None
+        menu_until_bytes = None
+        funccounter = itertools.count()
+    elif func:
+        funclinesep += ' ' * 4
         l.append('def {}():'.format(func))
-        linesep += ' ' * 4
+
     for t, data in communicate_chains:
         if t == 0:
             # process input
@@ -1658,12 +1681,23 @@ def create_zio(target, func=None, description=False, patch=False, zio_var='z', p
                 l.append(functions['write'].format(repr(data)))
         elif t == 1:
             # process output
-            if description:
-                l.append(os.linesep.join(('"""', ensure_str(data), '"""')))
             end_pos = len(data) - 1
             while data.find(data[end_pos:]) != end_pos:
                 end_pos -= 1
             until_bytes = data[end_pos:]
+            if auto:
+                # todo: get menu at first output?
+                if not menu_bytes:
+                    menu_bytes = data
+                    menu_until_bytes = until_bytes
+                if until_bytes.endswith(menu_until_bytes) and samelines(menu_bytes, data) > min_same_lines:
+                    if l:
+                        ll.append(funclinesep.join(l))
+                        ll.append(os.linesep)
+                        l.clear()
+                    l.append('def foo{}():'.format(next(funccounter)))
+            if description:
+                l.append(os.linesep.join(('"""', ensure_str(data), '"""')))
             if until_bytes == b'\n':
                 l.append(functions['readline'])
             else:
@@ -1671,11 +1705,25 @@ def create_zio(target, func=None, description=False, patch=False, zio_var='z', p
         else:
             raise NotImplementedError()
 
+    ll.append(funclinesep.join(l))
+    l.clear()
+
     # deal with patch, only print functions
     if patch:
-        import inspect
-        caller = inspect.stack()[1].filename
-        result = linesep.join(l)
+        # deal with empty communication
+        if not ll:
+            return
+        # deal with multi call
+        caller = None
+        if isinstance(patch, str):
+            caller = patch
+        else:
+            import inspect
+            for frame in inspect.stack():
+                if __file__ != frame.filename:
+                    caller = frame.filename
+                    break
+        result = os.linesep.join(ll)
         with open(caller, 'a+') as f:
             print(os.linesep, file=f)
             print(result, file=f)
@@ -1693,7 +1741,7 @@ def create_zio(target, func=None, description=False, patch=False, zio_var='z', p
         '',
     )
     header = os.linesep.join(headers)
-    result = os.linesep.join((header, linesep.join(l)))
+    result = os.linesep.join((header, os.linesep.join(ll)))
     print(result)
 
 
