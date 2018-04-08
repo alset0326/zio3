@@ -1578,7 +1578,9 @@ def zio(target, *, stdin=PIPE, stdout=TTY_RAW, print_read=RAW, print_write=RAW, 
         print_write = bool, if true, print all the data sent out
     """
 
-    if _is_hostport_tuple(target) or isinstance(target, socket.socket):
+    if isinstance(target, ZioBase):
+        return target
+    elif _is_hostport_tuple(target) or isinstance(target, socket.socket):
         return ZioSocket(target, print_read=print_read, print_write=print_write, timeout=timeout,
                          write_delay=write_delay, ignorecase=ignorecase, debug=debug)
     else:
