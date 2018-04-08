@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Mainly borrowed from pexpect. Thanks very much!
 
-__version__ = "3.0.3"
+__version__ = "3.0.4"
 __project__ = "https://github.com/alset0326/zio3"
 
 import struct
