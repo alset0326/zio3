@@ -146,6 +146,7 @@ TTY_RAW = 'ttyraw'  # io mode (process io): send all characters just untouched
 # Define print functions. They dealing with bytes not str
 
 ensure_bytes = lambda s: s and (isinstance(s, bytes) and s or s.encode('latin-1')) or b''
+b = ensure_bytes
 
 
 def ensure_str(s, encoding=sys.getdefaultencoding()):
@@ -158,6 +159,8 @@ def ensure_str(s, encoding=sys.getdefaultencoding()):
             return s.decode('latin-1')
     return ''
 
+
+s = ensure_str
 
 # colored needed consts
 ATTRIBUTES = dict(
